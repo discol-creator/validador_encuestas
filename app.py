@@ -14,48 +14,51 @@ with col2:
     file_final = st.file_uploader("Encuesta FINAL", type=['xlsx', 'csv'])
 
 if file_inicio and file_final:
+    # Cargar datos
     df_inicio = pd.read_excel(file_inicio) if file_inicio.name.endswith('xlsx') else pd.read_csv(file_inicio)
     df_final = pd.read_excel(file_final) if file_final.name.endswith('xlsx') else pd.read_csv(file_final)
 
-    # --- CONFIGURACIÓN ---
-    st.sidebar.header("Configuración de Columnas")
+    # --- CONFIGURACIÓN EN BARRA LATERAL ---
+    st.sidebar.header("⚙️ Configuración")
     id_inicio = st.sidebar.selectbox("ID (Email/Cédula) - Inicio", df_inicio.columns)
     id_final = st.sidebar.selectbox("ID (Email/Cédula) - Final", df_final.columns)
     
     score_inicio = st.sidebar.selectbox("Puntaje - Inicio", df_inicio.columns)
     score_final = st.sidebar.selectbox("Puntaje - Final", df_final.columns)
 
-    # Limpieza
-    df_inicio[id_inicio] = df_inicio[id_inicio].astype(str).str.strip().lower()
-    df_final[id_final] = df_final[id_final].astype(str).str.strip().lower()
+    # LIMPIEZA DE DATOS (Aquí estaba el error corregido)
+    df_inicio[id_inicio] = df_inicio[id_inicio].astype(str).str.strip().str.lower()
+    df_final[id_final] = df_final[id_final].astype(str).str.strip().str.lower()
 
     # --- CRUCE DE DATOS ---
-    # Realizamos un inner join para encontrar quiénes hicieron ambas
     ambas = pd.merge(df_inicio, df_final, left_on=id_inicio, right_on=id_final, suffixes=('_ini', '_fin'))
     
-    # Cálculo de impacto: Diferencia = Puntaje Final - Puntaje Inicial
-    ambas['Diferencia'] = ambas[score_final] - ambas[score_inicio]
+    if not ambas.empty:
+        # Cálculo de impacto
+        ambas['Diferencia'] = ambas[score_final] - ambas[score_inicio]
 
-    # --- VISUALIZACIÓN ---
-    st.divider()
-    st.subheader("📊 Resumen de Impacto")
-    
-    avg_diff = ambas['Diferencia'].mean()
-    m1, m2 = st.columns(2)
-    m1.metric("Participantes Completos", len(ambas))
-    m2.metric("Mejora Promedio", f"{avg_diff:.2f} pts")
+        # --- VISUALIZACIÓN ---
+        st.divider()
+        st.subheader("📊 Resumen de Impacto")
+        
+        avg_diff = ambas['Diferencia'].mean()
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Participantes Completos", len(ambas))
+        m2.metric("Mejora Promedio", f"{avg_diff:.2f} pts")
+        m3.metric("Tasa de Retención", f"{(len(ambas)/len(df_inicio))*100:.1f}%")
 
-    # Gráfico de impacto
-    fig = px.bar(ambas, x=id_inicio, y='Diferencia', 
-                 title="Diferencia de Puntaje por Participante",
-                 color='Diferencia', color_continuous_scale='RdYlGn',
-                 labels={'Diferencia': 'Δ Puntaje'})
-    st.plotly_chart(fig, use_container_width=True)
+        # Gráfico
+        fig = px.bar(ambas, x=id_inicio, y='Diferencia', 
+                     title="Evolución Individual de Puntajes",
+                     color='Diferencia', color_continuous_scale='RdYlGn',
+                     labels={'Diferencia': 'Cambio en Puntaje', id_inicio: 'Identificador'})
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("✅ Listado de Cumplimiento")
-    st.dataframe(ambas[[id_inicio, score_inicio, score_final, 'Diferencia']])
+        st.subheader("✅ Listado de Cumplimiento")
+        st.dataframe(ambas[[id_inicio, score_inicio, score_final, 'Diferencia']])
 
-    # Botón de descarga
-    st.download_button("Descargar Reporte Completo (CSV)", ambas.to_csv(index=False), "reporte_impacto.csv")
+        st.download_button("📥 Descargar Reporte Final", ambas.to_csv(index=False), "reporte_impacto.csv")
+    else:
+        st.warning("⚠️ No se encontraron coincidencias entre ambos archivos. Revisa si la columna de ID es la correcta en ambos.")
 else:
-    st.info("💡 Esperando la carga de ambos archivos para procesar el impacto...")
+    st.info("👋 ¡Hola Francisco! Sube las dos encuestas para empezar el análisis de impacto.")
